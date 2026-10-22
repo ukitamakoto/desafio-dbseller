@@ -1,0 +1,38 @@
+name: Regressão Recruitment
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 9 * * 1-5" # dias úteis, 06:00 em Brasília: detecta regressão causada por mudanças em outras áreas
+  workflow_dispatch:
+
+jobs:
+  regressao:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Instalar dependências (versões travadas no uv.lock)
+        run: uv sync --locked
+
+      - name: Instalar Chromium
+        run: uv run playwright install --with-deps chromium
+
+      - name: Executar regressão (ambiente compartilhado, somente leitura)
+        run: uv run pytest
+
+      - name: Publicar evidências
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidencias-${{ github.run_number }}
+          path: |
+            reports/
+            test-results/
+          retention-days: 30

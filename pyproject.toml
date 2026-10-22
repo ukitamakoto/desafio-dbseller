@@ -1,0 +1,23 @@
+[project]
+name = "desafio-dbseller"
+version = "0.1.0"
+description = "Regressão automatizada do fluxo público de Recruitment do OrangeHRM (desafio QA DBSeller)"
+requires-python = ">=3.12"
+dependencies = [
+    "jsonschema>=4.26.0",
+    "pytest>=9.1.1",
+    "pytest-html>=4.2.0",
+    "pytest-playwright>=0.10.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+base_url = "https://opensource-demo.orangehrmlive.com"
+addopts = "--browser chromium --tracing retain-on-failure --screenshot only-on-failure --output test-results --html=reports/relatorio.html --self-contained-html --junitxml=reports/junit.xml -ra"
+markers = [
+    "publico: página pública de vagas e formulário de candidatura (sem login)",
+    "interno: consulta autenticada no módulo Candidates (somente leitura)",
+    "contrato: validação de contrato JSON das APIs usadas pela tela",
+    "isolado: grava dados; roda só com ORANGEHRM_MODO=isolado",
+]

@@ -1,0 +1,25 @@
+# Lido pelo instalador CLI do OrangeHRM 5.9 e apagado por ele ao final. Credenciais somente locais.
+database:
+  hostName: db
+  hostPort: 3306
+  databaseName: orangehrm
+  privilegedDatabaseUser: root
+  privilegedDatabasePassword: root-somente-local
+  useSameDbUserForOrangeHRM: y
+  orangehrmDatabaseUser: ~
+  orangehrmDatabasePassword: ~
+  isExistingDatabase: n
+  enableDataEncryption: n
+organization:
+  name: DBSeller QA Isolado
+  country: BR
+admin:
+  adminUserName: Admin
+  adminPassword: Isolado@2026
+  adminEmployeeFirstName: Admin
+  adminEmployeeLastName: Isolado
+  workEmail: admin.isolado@example.com
+  contactNumber: ~
+  registrationConsent: false
+license:
+  agree: y

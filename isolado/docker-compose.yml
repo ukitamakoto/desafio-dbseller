@@ -1,0 +1,19 @@
+# Ambiente isolado: mesma versão da demo (OrangeHRM OS 5.9), descartável. Senhas valem só para esta máquina.
+services:
+  db:
+    image: mariadb:11.4
+    environment:
+      MARIADB_ROOT_PASSWORD: root-somente-local
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      retries: 30
+    tmpfs:
+      - /var/lib/mysql # banco em memória: derrubar o ambiente apaga toda a massa
+  orangehrm:
+    image: orangehrm/orangehrm:5.9
+    ports:
+      - "8200:80"
+    depends_on:
+      db:
+        condition: service_healthy
