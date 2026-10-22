@@ -20,17 +20,10 @@ def campos_multipart(request) -> dict:
             for p in mensagem.iter_parts()}
 
 
-def abrir_formulario(page, vaga=None):
-    vagas = VagasPublicasPage(page).abrir()
-    vaga = vaga or vagas.nomes()[0]
-    formulario = vagas.candidatar(vaga)
-    return formulario, vaga, re.search(r"/applyVacancy/id/(\d+)", page.url).group(1)
-
-
 @pytest.mark.publico
-def test_candidatura_valida_envia_os_dados_corretos_ao_servidor(page, tmp_path):
+def test_candidatura_valida_envia_os_dados_corretos_ao_servidor(page, formulario, tmp_path):
     dados = candidato()
-    formulario, _, vaga_id = abrir_formulario(page)
+    vaga_id = re.search(r"/applyVacancy/id/(\d+)", page.url).group(1)
     enviadas = []
 
     def intercepta(route):
@@ -64,16 +57,16 @@ def test_candidatura_valida_envia_os_dados_corretos_ao_servidor(page, tmp_path):
 @pytest.mark.isolado
 def test_candidatura_valida_grava_e_aparece_em_candidates(page, admin, vaga_isolada, tmp_path):
     dados = candidato(consentimento=True)
-    formulario, vaga, _ = abrir_formulario(page, vaga_isolada)
+    formulario = VagasPublicasPage(page).abrir().candidatar(vaga_isolada["nome"])
 
     formulario.preencher(dados).anexar(arquivo(tmp_path, "curriculo.pdf", 4096)).enviar()
     expect(formulario.dialogo_sucesso).to_contain_text("Application Received")
 
-    lista = admin.request.get(f"{API_CANDIDATOS}?limit=50&offset=0&model=list&sortField=candidate.dateOfApplication&sortOrder=DESC").json()["data"]
+    lista = admin.request.get(f"{API_CANDIDATOS}?limit=0&model=list&sortField=candidate.dateOfApplication&sortOrder=DESC").json()["data"]
     criados = [c for c in lista if c["lastName"] == dados["sobrenome"]]
     try:
         assert len(criados) == 1
-        assert criados[0]["vacancy"]["name"] == vaga
+        assert criados[0]["vacancy"]["name"] == vaga_isolada["nome"]
         assert criados[0]["status"]["label"] == "Application Initiated"
     finally:  # limpeza mesmo se a verificação falhar
         if criados:

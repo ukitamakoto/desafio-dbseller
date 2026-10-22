@@ -6,12 +6,15 @@ from uuid import uuid4
 import pytest
 from playwright.sync_api import BrowserContext, expect
 
+from pages.vagas_publicas import VagasPublicasPage
+
 # Modo "compartilhado" (padrão) nunca grava na demo pública; "isolado" é para uma instância própria.
 MODO = os.getenv("ORANGEHRM_MODO", "compartilhado")
 # Credenciais públicas exibidas na própria tela de login da demo; em outro ambiente, use variáveis.
 USUARIO = os.getenv("ORANGEHRM_USUARIO", "Admin")
 SENHA = os.getenv("ORANGEHRM_SENHA", "admin123")
 
+DEMO_COMPARTILHADA = "opensource-demo.orangehrmlive.com"
 LOGIN = re.compile(r"/auth/validate$")
 TELEMETRIA = re.compile(r"/events/push$")  # registro de uso do produto, não faz parte do fluxo
 
@@ -39,6 +42,9 @@ def browser_context_args(browser_context_args):
 @pytest.fixture(scope="session", autouse=True)
 def ambiente_disponivel(base_url, playwright):
     """Falha cedo, com mensagem clara, se o OrangeHRM estiver fora do ar (não é regressão do produto)."""
+    if MODO == "isolado" and DEMO_COMPARTILHADA in base_url:
+        pytest.exit("ORANGEHRM_MODO=isolado grava dados: use --base-url de uma instância própria, nunca a demo compartilhada",
+                    returncode=4)
     api = playwright.request.new_context(base_url=base_url)
     try:
         resposta = api.get("/web/index.php/api/v2/recruitment/public/vacancies?limit=1", timeout=30_000)
@@ -52,7 +58,11 @@ def ambiente_disponivel(base_url, playwright):
 
 
 def proteger(context: BrowserContext) -> list[str]:
-    """Aborta toda requisição de escrita (exceto login) e devolve a lista do que foi bloqueado."""
+    """Aborta toda requisição de escrita do navegador (exceto login) e devolve a lista do que foi bloqueado.
+
+    Não cobre `context.request` (APIRequestContext): escrita por API só existe em fixtures e testes do modo
+    isolado, e esse modo se recusa a apontar para a demo compartilhada (`ambiente_disponivel`).
+    """
     bloqueadas: list[str] = []
 
     def guarda(route):
@@ -68,10 +78,19 @@ def proteger(context: BrowserContext) -> list[str]:
 
 
 @pytest.fixture(autouse=True)
-def sem_escrita(context):
-    bloqueadas = proteger(context)
+def sem_escrita(request):
+    if not {"page", "context"} & set(request.fixturenames):  # testes só com `admin` já têm a guarda dele
+        yield []
+        return
+    bloqueadas = proteger(request.getfixturevalue("context"))
     yield bloqueadas
     assert not bloqueadas, f"Tentativa de escrita no ambiente compartilhado: {bloqueadas}"
+
+
+@pytest.fixture
+def formulario(page):
+    """Formulário de candidatura da primeira vaga publicada."""
+    return VagasPublicasPage(page).abrir().candidatar()
 
 
 @pytest.fixture(scope="session")
@@ -96,17 +115,24 @@ def vaga_isolada(browser, sessao_admin, browser_context_args):
     """Massa própria do modo isolado: cargo e vaga ativa/publicada criados pela API e removidos ao final."""
     context = browser.new_context(**browser_context_args, storage_state=sessao_admin)
     api, base = context.request, "/web/index.php/api/v2"
+
+    def ok(resposta, acao):
+        assert resposta.ok, f"{acao}: HTTP {resposta.status} {resposta.text()[:200]}"
+        return resposta.json()["data"]
+
     marca = uuid4().hex[:6]
-    gestor = api.get(f"{base}/admin/users?username={USUARIO}").json()["data"][0]["employee"]["empNumber"]
-    cargo = api.post(f"{base}/admin/job-titles", data={"title": f"QA Isolado {marca}"}).json()["data"]["id"]
-    vaga = api.post(f"{base}/recruitment/vacancies", data={
-        "name": f"Vaga QA Isolada {marca}", "jobTitleId": cargo, "employeeId": gestor,
-        "numOfPositions": 1, "description": "Massa sintética", "status": True, "isPublished": True,
-    }).json()["data"]
-    yield vaga["name"]
-    api.delete(f"{base}/recruitment/vacancies", data={"ids": [vaga["id"]]})
-    api.delete(f"{base}/admin/job-titles", data={"ids": [cargo]})
-    context.close()
+    gestor = ok(api.get(f"{base}/admin/users?username={USUARIO}"), "buscar usuário")[0]["employee"]["empNumber"]
+    cargo = ok(api.post(f"{base}/admin/job-titles", data={"title": f"QA Isolado {marca}"}), "criar cargo")["id"]
+    try:
+        vaga = ok(api.post(f"{base}/recruitment/vacancies", data={
+            "name": f"Vaga QA Isolada {marca}", "jobTitleId": cargo, "employeeId": gestor,
+            "numOfPositions": 1, "description": "Massa sintética", "status": True, "isPublished": True,
+        }), "criar vaga")
+        yield {"id": vaga["id"], "nome": vaga["name"]}
+        ok(api.delete(f"{base}/recruitment/vacancies", data={"ids": [vaga["id"]]}), "apagar vaga")
+    finally:  # o cargo sai mesmo se a vaga falhar
+        api.delete(f"{base}/admin/job-titles", data={"ids": [cargo]})
+        context.close()
 
 
 @pytest.fixture(scope="session", autouse=True)

@@ -9,6 +9,7 @@ TIPO_NAO_PERMITIDO = "File type not allowed"
 TAMANHO_EXCEDIDO = "Attachment Size Exceeded"
 LIMITE_30 = "Should not exceed 30 characters"
 LIMITE_50 = "Should not exceed 50 characters"
+LIMITE_250 = "Should not exceed 250 characters"
 TELEFONE_INVALIDO = "Allows numbers and only + - / ( )"
 
 
@@ -53,12 +54,12 @@ class CandidaturaPage:
         self.enviar_botao.click()
         return self
 
-    def erros(self) -> dict[str, str]:
+    def erros(self, quantidade: int) -> dict[str, str]:
         """Mensagem de validação por campo, identificado pelo rótulo ou pelo placeholder.
 
-        Espera a validação renderizar; pressupõe ao menos uma mensagem na tela (há sempre um obrigatório vazio).
+        Espera exatamente `quantidade` mensagens na tela antes de ler: um erro a mais ou a menos falha o teste.
         """
-        expect(self.page.locator(".oxd-input-field-error-message").first).to_be_visible()
+        expect(self.page.locator(".oxd-input-field-error-message")).to_have_count(quantidade)
         return self.page.evaluate(
             """() => Object.fromEntries([...document.querySelectorAll('.oxd-input-field-error-message')].map(e => {
                 const grupo = e.closest('.oxd-input-group');

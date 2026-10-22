@@ -2,7 +2,7 @@
 
 [![Regressão Recruitment](https://github.com/ukitamakoto/desafio-dbseller/actions/workflows/regressao-recruitment.yml/badge.svg)](https://github.com/ukitamakoto/desafio-dbseller/actions/workflows/regressao-recruitment.yml)
 
-Suíte automatizada que detecta regressões no fluxo público de candidatura do módulo **Recruitment** do OrangeHRM e na consulta interna de **Candidates**. Roda em cerca de 1 minuto, por qualquer pessoa ou na pipeline, e **não grava nada na demo compartilhada**.
+Suíte automatizada que detecta regressões no fluxo público de candidatura do módulo **Recruitment** do OrangeHRM e na consulta interna de **Candidates**. Roda em menos de 2 minutos, por qualquer pessoa ou na pipeline, e **não grava nada na demo compartilhada**.
 
 Este repositório é a entrega da Atividade 3. A investigação das Atividades 1 e 2 e as evidências estão no documento de evidências enviado junto.
 
@@ -22,14 +22,24 @@ Este repositório é a entrega da Atividade 3. A investigação das Atividades 1
 | `test_vagas_publicas.py` · contrato da API pública | Esquema JSON fechado (`additionalProperties: false`), `meta.total` coerente, nenhuma vaga inativa ou não publicada exposta | Contrato |
 | `test_vagas_publicas.py` · página pública | A página lista exatamente as vagas da API, na mesma ordem, inclusive as carregadas na rolagem | Oráculo pela API |
 | `test_candidatura_validacoes.py` · envio vazio | Nome, sobrenome, e-mail e currículo exigidos, e nenhuma requisição de escrita sai do navegador | Negativo |
-| `test_candidatura_validacoes.py` · limites e formatos (×8) | Nome 30/31, e-mail 50/51, e-mail sem domínio e sem arroba, telefone válido e com letras | Valor-limite, partição de equivalência |
+| `test_candidatura_validacoes.py` · limites e formatos (×12) | Nome 30/31, e-mail 50/51, e-mail sem domínio e sem arroba, telefone válido e com letras, palavras-chave e notas 250/251 | Valor-limite, partição de equivalência |
 | `test_candidatura_validacoes.py` · currículo (×4) | PDF de exatamente 1 MB aceito, 1 MB + 1 byte recusado, `.exe` e `.png` recusados | Valor-limite, negativo |
 | `test_candidatura_envio.py` · candidatura válida | O POST multipart leva vaga, nome, e-mail, telefone, palavras-chave, notas, currículo e token CSRF; o consentimento desmarcado não é enviado; o diálogo de sucesso aparece | Positivo até a fronteira da gravação |
 | `test_candidatura_envio.py` · gravação real (só isolado) | A candidatura é gravada, aparece em Candidates com a vaga e o status *Application Initiated* e é apagada ao final | Positivo ponta a ponta |
 | `test_candidatos_consulta.py` · vagas públicas × internas | A página pública mostra exatamente as vagas ativas e publicadas do cadastro interno | Consistência entre áreas |
 | `test_candidatos_consulta.py` · filtro por vaga | O filtro de Candidates mostra a mesma quantidade, a mesma vaga e os mesmos nomes que a API; resposta validada por contrato | Consistência tela × API, contrato |
+| `test_vagas_publicas.py` · link de vaga indisponível | O link de uma vaga inexistente ou encerrada não pode abrir uma página em branco | Defeito fixado (BUG-07) |
+| `test_candidatura_servidor.py` · validação no servidor (×5, só isolado) | Sem passar pelo navegador, o servidor recusa `.exe`, PDF acima de 1 MB, nome com 40 caracteres, nome só com espaços e e-mail inválido, e nada é gravado | Negativo, validação no servidor |
+| `test_candidatura_servidor.py` · currículo acima de 2 MB (só isolado) | O servidor deve recusar sem erro interno | Defeito fixado (BUG-08) |
 
-São 19 testes: 18 rodam na demo compartilhada e 1 só no ambiente isolado.
+São 30 testes:
+
+- **23 na demo compartilhada.** Todos passam, exceto 1 que é falha conhecida (BUG-07).
+- **7 só no ambiente isolado.** Um deles é falha conhecida (BUG-08).
+
+### Defeitos fixados em teste
+
+Os defeitos encontrados viram testes com `xfail(strict=True)`. A suíte continua verde enquanto o bug existe. No dia em que o bug for corrigido, o teste passa, a suíte acusa `XPASS(strict)` e o marcador deve ser removido. Os IDs (BUG-07, BUG-08) são os do documento de evidências.
 
 ## Como rodar
 
@@ -48,7 +58,10 @@ Saídas:
 - `reports/junit.xml`: para a pipeline.
 - `test-results/`: trace e print de cada teste que falhar. Abra com `uv run playwright show-trace test-results/<teste>/trace.zip`.
 
-O código de saída `3` significa que o ambiente estava fora do ar, e não regressão do produto. A suíte verifica isso antes de começar.
+Dois códigos de saída indicam problema de ambiente, não regressão do produto. A suíte verifica os dois antes de começar:
+
+- `3`: o ambiente estava fora do ar.
+- `4`: `ORANGEHRM_MODO=isolado` apontando para a demo compartilhada. É recusado para nunca gravar nela.
 
 Variáveis opcionais: `ORANGEHRM_USUARIO`, `ORANGEHRM_SENHA` (padrão: as credenciais públicas exibidas na tela de login da demo) e `ORANGEHRM_MODO` (`compartilhado` ou `isolado`). A URL muda com `--base-url`.
 
@@ -74,7 +87,11 @@ A limpeza tem três camadas:
 2. A massa da sessão (cargo e vaga publicada) é criada no início e removida no fim.
 3. O banco roda em `tmpfs`, então derrubar os containers apaga qualquer resto.
 
-No modo isolado a guarda deixa passar a escrita. Resultado local: 18 passaram e 1 foi pulado. O pulado é o filtro de Candidates, porque a instância nova não tem candidatos antes do teste de gravação.
+No modo isolado a guarda deixa passar a escrita. Resultado local:
+
+- 27 passaram.
+- 2 são falhas conhecidas (BUG-07 e BUG-08).
+- 1 foi pulado: o filtro de Candidates, porque a instância nova não tem candidatos antes do teste de gravação.
 
 ## Versões
 
@@ -116,7 +133,7 @@ Nenhum dado pessoal, credencial corporativa ou arquivo real é usado.
 
 - **A demo é compartilhada e muda o tempo todo.** Ela tem vagas criadas por outros usuários ("test"; "Tester" surgiu durante o desafio). O colaborador ligado ao Admin foi renomeado de um dia para o outro. O formato global de data está em `Y-d-m`, diferente do padrão. Por isso os testes comparam a tela com a API no momento da execução, em vez de valores fixos.
 - **A demo pode ficar fora do ar.** A suíte para com o código 3 e uma mensagem clara.
-- **Validação do lado do servidor.** No ambiente compartilhado não dá para testar (exigiria gravar). Ela fica para o modo isolado, ainda sem casos (ver "Como cresce").
+- **Validação do lado do servidor.** Só é testada no modo isolado, porque exige enviar POST direto. A guarda cobre o tráfego do navegador, não o `APIRequestContext`. Por isso toda escrita por API fica em fixtures e testes do modo isolado, que recusa a URL da demo.
 - **O positivo na demo para na fronteira do servidor.** Ele prova o contrato entre tela e servidor, não o processamento da candidatura. O processamento é coberto pelo teste isolado.
 - **Filtro de Candidates.** Depende de existir alguma vaga com candidatos, e é pulado quando não há.
 - **Navegador e idioma.** Só Chromium, e mensagens em inglês (en-US), o idioma da demo.
@@ -124,11 +141,9 @@ Nenhum dado pessoal, credencial corporativa ou arquivo real é usado.
 ## Como cresce
 
 - **Mais casos no modo isolado:**
-  - POST direto ao servidor com arquivo inválido (validação no servidor).
   - Candidatura para vaga inativa ou não publicada.
-  - Candidatura duplicada.
-  - Workflow do candidato até *Hire*, incluindo o defeito encontrado na Atividade 1: ações em vaga sem hiring manager devolvem 500.
-- **Defeitos fixados em teste:** `xfail(strict=True)` por bug aberto, para a suíte avisar quando o bug for corrigido.
+  - Candidatura duplicada (hoje aceita: regra a definir).
+  - Workflow do candidato até *Hire*, incluindo o BUG-06: ações em vaga sem hiring manager devolvem 500.
 - **Mais navegadores:** Firefox e WebKit (`--browser firefox --browser webkit`) e viewport mobile para a página pública.
 - **Acessibilidade:** axe-core no formulário público.
 - **Contratos:** gerados a partir da especificação OpenAPI do OrangeHRM.

@@ -3,26 +3,21 @@ import pytest
 
 from dados import MB, arquivo
 from pages import candidatura as msg
-from pages.vagas_publicas import VagasPublicasPage
 
 pytestmark = pytest.mark.publico
 
+OBRIGATORIOS = {"First Name": msg.OBRIGATORIO, "Last Name": msg.OBRIGATORIO, "Email": msg.OBRIGATORIO, "Resume": msg.OBRIGATORIO}
 
-@pytest.fixture
-def formulario(page):
-    vagas = VagasPublicasPage(page).abrir()
-    return vagas.candidatar(vagas.nomes()[0])
+
+def esperados(preenchido: str, erro: str | None) -> dict[str, str]:
+    """Os obrigatórios que ficaram vazios, mais o erro do campo preenchido, se houver."""
+    return {k: v for k, v in OBRIGATORIOS.items() if k != preenchido} | ({preenchido: erro} if erro else {})
 
 
 def test_envio_vazio_exige_todos_os_campos_obrigatorios(formulario, sem_escrita):
     formulario.enviar()
 
-    assert formulario.erros() == {
-        "First Name": msg.OBRIGATORIO,
-        "Last Name": msg.OBRIGATORIO,
-        "Email": msg.OBRIGATORIO,
-        "Resume": msg.OBRIGATORIO,
-    }
+    assert formulario.erros(4) == OBRIGATORIOS
     assert sem_escrita == []  # validação no cliente: nenhuma requisição de escrita saiu
 
 
@@ -37,14 +32,20 @@ def test_envio_vazio_exige_todos_os_campos_obrigatorios(formulario, sem_escrita)
         ("email", "Email", "dbsqa.example.com", msg.EMAIL_INVALIDO),
         ("telefone", "Contact Number", "+55 (51) 99999-0000", None),
         ("telefone", "Contact Number", "abc123", msg.TELEFONE_INVALIDO),
+        ("palavras_chave", "Keywords", "k" * 250, None),
+        ("palavras_chave", "Keywords", "k" * 251, msg.LIMITE_250),
+        ("notas", "Notes", "n" * 250, None),
+        ("notas", "Notes", "n" * 251, msg.LIMITE_250),
     ],
     ids=["nome-30-aceito", "nome-31-recusado", "email-50-aceito", "email-51-recusado",
-         "email-sem-dominio", "email-sem-arroba", "telefone-valido", "telefone-com-letras"],
+         "email-sem-dominio", "email-sem-arroba", "telefone-valido", "telefone-com-letras",
+         "keywords-250-aceito", "keywords-251-recusado", "notas-250-aceito", "notas-251-recusado"],
 )
 def test_limites_e_formatos_dos_campos(formulario, campo, rotulo, valor, esperado):
     formulario.preencher({campo: valor}).enviar()
 
-    assert formulario.erros().get(rotulo) == esperado
+    erros = esperados(rotulo, esperado)
+    assert formulario.erros(len(erros)) == erros
 
 
 @pytest.mark.parametrize(
@@ -60,4 +61,5 @@ def test_limites_e_formatos_dos_campos(formulario, campo, rotulo, valor, esperad
 def test_curriculo_respeita_tipo_e_tamanho(formulario, tmp_path, nome, tamanho, cabecalho, esperado):
     formulario.anexar(arquivo(tmp_path, nome, tamanho, cabecalho)).enviar()
 
-    assert formulario.erros().get("Resume") == esperado
+    erros = esperados("Resume", esperado)
+    assert formulario.erros(len(erros)) == erros

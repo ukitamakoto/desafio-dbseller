@@ -31,7 +31,11 @@ class VagasPublicasPage:
     def nomes(self) -> list[str]:
         return [t.strip() for t in self.cards.locator(".oxd-text--card-title").all_inner_texts()]
 
-    def candidatar(self, vaga: str) -> CandidaturaPage:
-        titulo = self.page.locator(".oxd-text--card-title", has_text=re.compile(rf"^{re.escape(vaga)}$"))
-        self.cards.filter(has=titulo).get_by_role("button", name="Apply").click()
+    def candidatar(self, vaga: str | None = None) -> CandidaturaPage:
+        """Abre o formulário da vaga pelo nome; sem nome, o da primeira vaga listada."""
+        cards = self.cards
+        if vaga:
+            titulo = self.page.locator(".oxd-text--card-title", has_text=re.compile(rf"^{re.escape(vaga)}$"))
+            cards = cards.filter(has=titulo)
+        cards.first.get_by_role("button", name="Apply").click()  # first: nomes podem se repetir na demo
         return CandidaturaPage(self.page).aguardar()

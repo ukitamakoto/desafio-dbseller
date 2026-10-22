@@ -21,9 +21,12 @@ class CandidatosPage:
         grupo = self.page.locator(".oxd-input-group", has=self.page.get_by_text("Vacancy", exact=True))
         grupo.locator(".oxd-select-text").click()
         self.page.get_by_role("option", name=vaga, exact=True).click()
-        with self.page.expect_response(lambda r: "/api/v2/recruitment/candidates?" in r.url):
+        with self.page.expect_response(lambda r: "/api/v2/recruitment/candidates?" in r.url) as resposta:
             self.page.get_by_role("button", name="Search").click()
-        expect(self.total).to_be_visible()
+        # Espera a tela refletir a resposta do filtro; antes disso ainda aparece o total sem filtro.
+        total = resposta.value.json()["meta"]["total"]
+        esperado = rf"\({total}\) Records? Found" if total else "No Records Found"
+        expect(self.total).to_have_text(re.compile(rf"^\s*{esperado}\s*$"))
         return self
 
     def quantidade(self) -> int:
